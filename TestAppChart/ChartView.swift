@@ -33,6 +33,7 @@ struct ChartView: View {
     }
     
     @State private var isDragging: Bool = false
+    @State private var selectedAmount: String? = nil
     
     var body: some View {
         if viewModel.currentBalance ?? 0.0 < 0.01 {
@@ -78,23 +79,36 @@ struct ChartView: View {
     }
     
     private var chart: some View {
-        Chart(viewModel.earningsData) { dataPoint in
-            LineMark(
-                x: .value("Date", dataPoint.date),
-                y: .value("Amount", dataPoint.amount)
-            )
-            .interpolationMethod(.monotone)
-            .foregroundStyle(viewModel.chartLoaded ? chartColor : emptyAxisColor)
-            .lineStyle(StrokeStyle(lineWidth: lineWidth))
-            .symbol { symbolView(for: dataPoint) }
+        
+        Chart {
+            
+            ForEach(viewModel.earningsData) { dataPoint in
+                LineMark(
+                    x: .value("Date", "\(dataPoint.date)"),
+                    y: .value("Amount", dataPoint.amount)
+                )
+                .interpolationMethod(.monotone)
+                .foregroundStyle(viewModel.chartLoaded ? chartColor : emptyAxisColor)
+                .lineStyle(StrokeStyle(lineWidth: lineWidth))
+                .symbol { symbolView(for: dataPoint) }
+            }
+            
+            //-------------------------------------------------- Selected Value
+            
+            if selectedAmount != nil {
+                selectedValueView(selectedAmount: $selectedAmount, plotData: viewModel.earningsData)
+            }
+            
         }
-        .chartOverlay { selectionOverlay(proxy: $0) }
+       // .chartOverlay { selectionOverlay(proxy: $0) }
         .chartYScale(domain: minYValue...maxYValue)
         .chartXAxis {}
         .chartYAxis {}
         .frame(height: chartHeight)
         .animation(nil, value: viewModel.earningsData)
         .offset(y: -timeFramePickerSpacing)
+        .chartXSelection(value: $selectedAmount)
+        
     }
     
     private func findElement(location: CGPoint, proxy: ChartProxy, geometry: GeometryProxy) -> Earning? {
@@ -288,6 +302,89 @@ struct ChartView: View {
     }
     
 
+}
+
+
+// MARK: - Helper Functions
+// MARK: -
+extension ChartView {
+    
+    func selectedValueView(selectedAmount: Binding<String?>, plotData: [Earning]) -> some ChartContent {
+        
+        RuleMark(
+            x: .value("Selected", selectedAmount.wrappedValue ?? "")
+        )
+        .foregroundStyle(Color.gray.opacity(0.3))
+        .offset(yStart: -10)
+        .zIndex(-1)
+        .annotation(
+            position: .automatic, spacing: 0,
+            overflowResolution: .init(
+                x: .fit(to: .chart),
+                y: .fit(to: .automatic)
+            )
+        ) {
+            
+            HStack {
+                
+                ForEach(plotData.filter({ "\($0.date)" == selectedAmount.wrappedValue ?? ""})){ value in
+                    
+                    VStack {
+                        
+                        //------------------------------------------- Date
+                        
+                        HStack {
+                            
+                            Text("Date:")
+                                .bold()
+                            
+                            Text(formatDate(value.date))
+                            
+                            Spacer()
+                            
+                        }
+                        .font(.system(size: 12, weight: .regular))
+                        
+                        //------------------------------------------- Amount
+                        
+                        HStack {
+                            
+                            Text("Amount:")
+                                .bold()
+                            
+                            Text(String(format: "%.1f", value.amount))
+                            
+                            Spacer()
+                            
+                        }
+                        .font(.system(size: 12, weight: .regular))
+                        
+                        
+                        
+                    }
+                    .foregroundStyle(Color.black)
+                    
+                }
+                
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background {
+                Color(uiColor: UIColor.systemGray6).cornerRadius(4)
+            }
+        }
+
+        
+    }
+    
+    func formatDate(_ date: Date?, format: String = "dd-MMM-yyyy", locale: Locale = Locale(identifier: "en_US_POSIX")) -> String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = format
+        dateFormatter.locale = locale
+        guard let date = date else { return "" }
+        return dateFormatter.string(from: date)
+    }
+    
 }
 
 // MARK: - Preview
